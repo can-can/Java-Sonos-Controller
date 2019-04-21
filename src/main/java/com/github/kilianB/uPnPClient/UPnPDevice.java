@@ -1,46 +1,29 @@
 package com.github.kilianB.uPnPClient;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.StringReader;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.UnknownHostException;
-import java.text.MessageFormat;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.Logger;
-
+import com.github.kilianB.DaemonThread;
+import com.github.kilianB.NetworkUtil;
+import com.github.kilianB.StringUtil;
+import com.github.kilianB.sonos.ParserHelper;
 import org.apache.commons.text.StringEscapeUtils;
 import org.jdom2.Document;
 import org.jdom2.JDOMException;
 import org.jdom2.input.SAXBuilder;
 
-import com.github.kilianB.DaemonThread;
-import com.github.kilianB.DaemonThreadFactory;
-import com.github.kilianB.NetworkUtil;
-import com.github.kilianB.StringUtil;
-import com.github.kilianB.sonos.ParserHelper;
+import java.io.*;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.text.MessageFormat;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.*;
+import java.util.logging.Logger;
 
 /**
  * A UPnPDevice represents a single physical device. The class is used to
  * interact with UPnP subscriptions.
- * 
+ *
  * @author Kilian
  *
  */
@@ -89,7 +72,7 @@ public class UPnPDevice {
 
 	/**
 	 * Creates a UPnP Device based on the supplied inetAddress.
-	 * 
+	 *
 	 * @param inetAddress The address of the UPnP device
 	 * @param deviceInfo  Information retrieved durin Simple Device Discovery
 	 */
@@ -105,7 +88,7 @@ public class UPnPDevice {
 
 	/**
 	 * Get the InetAddress of the UPnPDevice
-	 * 
+	 *
 	 * @return the address of the device
 	 */
 	public InetAddress getIP() {
@@ -115,7 +98,7 @@ public class UPnPDevice {
 	/**
 	 * get the location information of the device supplied during Simple Device
 	 * Discovery step
-	 * 
+	 *
 	 * @return Field value contains a URL to the UPnP description of the root
 	 *         device. Normally the host portion contains a literal IP address
 	 *         rather than a domain name in unmanaged networks
@@ -137,7 +120,7 @@ public class UPnPDevice {
 	 * version number of the UPnP version than the control point itself implements.
 	 * For example, control points implementing UDA version 1.0 will be able to
 	 * interoperate with devices implementing UDA version 1.1.
-	 * 
+	 *
 	 * @see <a href=
 	 *      "http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf">UPnP-arch-DeviceArchitecture-v1.1</a>
 	 * @return The server property
@@ -151,7 +134,7 @@ public class UPnPDevice {
 	 * Single URI. The response sent by the device depends on the field value of the
 	 * ST header field that was sent in the request. In some cases, the device MUST
 	 * send multiple response messages as follows.
-	 * 
+	 *
 	 * @see <a href=
 	 *      "http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf">UPnP-arch-DeviceArchitecture-v1.1</a>
 	 * @return The st field value
@@ -162,7 +145,7 @@ public class UPnPDevice {
 
 	/**
 	 * Get the Unique Service Name property of this UPnP Device.
-	 * 
+	 *
 	 * @see <a href=
 	 *      "http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf">UPnP-arch-DeviceArchitecture-v1.1</a>
 	 * @return The usn field value
@@ -173,7 +156,7 @@ public class UPnPDevice {
 
 	/**
 	 * Return the content of a field retrieved during SimpleDeviceDiscovery
-	 * 
+	 *
 	 * @param fieldID The id of the header field
 	 * @return the content of the field
 	 */
@@ -191,7 +174,7 @@ public class UPnPDevice {
 
 	/**
 	 * Subscribe to a upnp event with a default resubscription interval of 1 hour
-	 * 
+	 *
 	 * @param eventHandler The event handler being called once the device sends an
 	 *                     event
 	 * @param servicePath  The service path of the event
@@ -206,7 +189,7 @@ public class UPnPDevice {
 
 	/**
 	 * Subscribe to an UPnP Event
-	 * 
+	 *
 	 * @param eventHandler  The event handler being called once the device sends an
 	 *                      event
 	 * @param servicePath   The service path of the event
@@ -319,7 +302,7 @@ public class UPnPDevice {
 	/**
 	 * Initialize the server socket to be able to receive UPNP Event callbacks. Only
 	 * need to be called once
-	 * 
+	 *
 	 * @throws IOException during socket creation.
 	 */
 	private void initSubscription() throws IOException {
@@ -335,7 +318,7 @@ public class UPnPDevice {
 
 	/**
 	 * Issue a renewal request
-	 * 
+	 *
 	 * @param subscription Subscription which will be renewed
 	 * @throws IOException IOException thrown when device can not be reached
 	 */
@@ -456,14 +439,14 @@ public class UPnPDevice {
 					parseUPnPEvent(eventSocket);
 				}).start();
 			}catch (IOException e) {
-				
+
 				if(e instanceof java.net.SocketException && e.getMessage().contains("closed")) {
 					//Disregard. socket closed
 					LOGGER.info("UPnPEvent socket closed");
 				}else {
 					e.printStackTrace();
 				}
-			} 
+			}
 			catch (Exception exception) {
 				// Bad practice but catch all issues like null pointer exceptions
 				// which can unexpacetly happen during parsing if udp sends a bad request.
@@ -564,8 +547,8 @@ public class UPnPDevice {
 				output.close();
 				socket.close();
 			}
-			
-			
+
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -577,7 +560,7 @@ public class UPnPDevice {
 	public void deinit() {
 		scheduler.shutdownNow();
 	}
-	
+
 	private Thread handleShutdown = new Thread(() -> {
 
 		if (eventCallbackSocket != null && !eventCallbackSocket.isClosed()) {
@@ -601,7 +584,7 @@ public class UPnPDevice {
 	 * Creates a dummy device pointing to the supplied ip address. This device can
 	 * be used to subscribe to events but does not contain information usually
 	 * transmitted via the SSDP advertisement.
-	 * 
+	 *
 	 * @param ip Ip of the fake device
 	 * @return A UPnPDevice pointing to the ip
 	 * @throws UnknownHostException If the ip is not well formated or valid
